@@ -198,7 +198,7 @@ func (g *SynchronizerServer) GenesisSync(ctx context.Context, request *trident.G
 	}
 
 	platformData := request.GetPlatformData()
-	if version == localVersion || platformData == nil {
+	if version == localVersion {
 		log.Debugf("genesis sync renew version %v from ip %s vtap_id %v", version, remote, vtapID, logger.NewORGPrefix(orgID))
 		g.genesisSyncQueue.Put(
 			common.VIFRPCMessage{
@@ -212,6 +212,11 @@ func (g *SynchronizerServer) GenesisSync(ctx context.Context, request *trident.G
 			},
 		)
 		return &trident.GenesisSyncResponse{Version: &localVersion}, nil
+	}
+
+	if platformData == nil {
+		log.Infof("genesis sync received version %v message with nil platform data from ip %s vtap_id %v", version, remote, vtapID, logger.NewORGPrefix(orgID))
+		return &trident.GenesisSyncResponse{}, nil
 	}
 
 	log.Infof("genesis sync received version %v -> %v from ip %s vtap_id %v", localVersion, version, remote, vtapID, logger.NewORGPrefix(orgID))

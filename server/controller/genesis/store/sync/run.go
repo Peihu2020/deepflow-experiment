@@ -124,6 +124,7 @@ func (g *GenesisSync) GetGenesisSyncResponse(orgID int) (common.GenesisSyncDataR
 	syncVPCLcuuidSet := map[string]bool{}
 	syncVinterfaceLcuuidSet := map[string]bool{}
 	syncProcessLcuuidSet := map[string]bool{}
+	log.Infof("request controllers (%#v)", controllers, logger.NewORGPrefix(orgID))
 	for _, controller := range controllers {
 		// skip other region controller
 		if region, ok := controllerIPToRegion[controller.IP]; !ok || region != currentRegion {

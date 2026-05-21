@@ -26,6 +26,7 @@ import (
 )
 
 type GenesisSyncType interface {
+	GetInfo() string
 	GetLcuuid() string
 	GetVtapID() uint32
 }

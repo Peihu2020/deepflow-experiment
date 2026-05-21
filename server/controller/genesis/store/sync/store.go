@@ -87,7 +87,9 @@ func (s *SyncStorage) Renew(orgID int, vtapID uint32, key string, refresh, wrEna
 	err = db.Model(&model.GenesisStorage{}).Where("vtap_id = ? AND node_ip <> ?", vtapID, s.nodeIP).Update("node_ip", s.nodeIP).Error
 	if err != nil {
 		log.Warningf("vtap id (%d) refresh storage to node (%s) failed: %s", vtapID, s.nodeIP, err.Error(), logger.NewORGPrefix(orgID))
+		return
 	}
+	log.Infof("update storage vtap=%d and node!=%s, set node=%s", vtapID, s.nodeIP, s.nodeIP, logger.NewORGPrefix(orgID))
 }
 
 func (s *SyncStorage) Update(orgID int, vtapID uint32, key string, data common.GenesisSyncDataResponse) {
@@ -157,6 +159,7 @@ func (s *SyncStorage) Update(orgID int, vtapID uint32, key string, data common.G
 			log.Errorf("update storage (vtap_id:%d/node_ip:%s) failed: %s", vtapID, s.nodeIP, err.Error(), logger.NewORGPrefix(orgID))
 			return
 		}
+		log.Infof("update storage vtap=%d and node=%s", vtapID, s.nodeIP, logger.NewORGPrefix(orgID))
 	}
 	s.dirty = true
 }
@@ -209,6 +212,8 @@ func (s *SyncStorage) loadFromDatabase() {
 
 	s.genesisSyncInfo.Processes = NewProcessPlatformDataOperation()
 	s.genesisSyncInfo.Processes.Load(s.nodeIP)
+
+	log.Info("genesis load from db complete")
 
 	s.fetch()
 }

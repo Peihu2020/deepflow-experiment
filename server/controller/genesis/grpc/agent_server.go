@@ -195,7 +195,7 @@ func (g *SynchronizerServer) AgentGenesisSync(ctx context.Context, request *agen
 	_, enabled := g.workloadResourceEnabledCache.Get(fmt.Sprintf("%d-%s", orgID, groupShortLcuuid))
 
 	platformData := request.GetPlatformData()
-	if version == localVersion || platformData == nil {
+	if version == localVersion {
 		// If the worload-v is modified to be enabled during the period of continuous heartbeat,
 		// it will trigger the re-reporting of the full data.
 		if _, ok := g.workloadResourceChangeEnabledCache.Get(vtap); ok {
@@ -220,6 +220,11 @@ func (g *SynchronizerServer) AgentGenesisSync(ctx context.Context, request *agen
 			},
 		)
 		return &agent.GenesisSyncResponse{Version: &localVersion}, nil
+	}
+
+	if platformData == nil {
+		log.Infof("genesis sync received version %v message with nil platform data from ip %s vtap_id %v", version, remote, vtapID, logger.NewORGPrefix(orgID))
+		return &agent.GenesisSyncResponse{}, nil
 	}
 
 	log.Infof("genesis sync received version %v -> %v from ip %s vtap_id %v", localVersion, version, remote, vtapID, logger.NewORGPrefix(orgID))
