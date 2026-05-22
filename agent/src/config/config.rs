@@ -1192,7 +1192,7 @@ pub struct EbpfProfileOnCpu {
 impl Default for EbpfProfileOnCpu {
     fn default() -> Self {
         Self {
-            disabled: false,
+            disabled: true,
             sampling_frequency: 99,
             aggregate_by_cpu: false,
         }
