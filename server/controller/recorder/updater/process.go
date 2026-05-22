@@ -80,7 +80,8 @@ func (p *Process) generateDBItemToAdd(cloudItem *cloudmodel.Process) (*metadbmod
 	// add pod node id
 	var podNodeID int
 	var podGroupID int
-	if deviceType == common.VIF_DEVICE_TYPE_POD {
+	switch deviceType {
+	case common.VIF_DEVICE_TYPE_POD:
 		podInfo, err := p.cache.ToolDataSet.GetPodInfoByID(deviceID)
 		if err != nil {
 			log.Error(err)
@@ -90,7 +91,7 @@ func (p *Process) generateDBItemToAdd(cloudItem *cloudmodel.Process) (*metadbmod
 			podNodeID = podInfo.PodNodeID
 			podGroupID = podInfo.PodGroupID
 		}
-	} else if deviceType == common.VIF_DEVICE_TYPE_POD_NODE {
+	case common.VIF_DEVICE_TYPE_POD_NODE:
 		podNodeID = deviceID
 	}
 
