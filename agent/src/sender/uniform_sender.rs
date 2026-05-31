@@ -427,6 +427,14 @@ pub struct UniformSender<T> {
     written_size: u64,
 
     cached: bool,
+
+        // ========== 新增：HTTP 转发相关字段 ==========
+    http_enabled: bool,
+    http_url: String,
+    http_timeout: Duration,
+    http_batch_size: usize,
+    http_tx: Option<std::sync::mpsc::Sender<String>>,
+    http_handle: Option<JoinHandle<()>>,
 }
 
 impl<T: Sendable> UniformSender<T> {
@@ -447,6 +455,73 @@ impl<T: Sendable> UniformSender<T> {
         leaky_bucket: Arc<LeakyBucket>,
     ) -> Self {
         let cfg = config.load();
+        
+        // ========== 新增：从配置读取 HTTP 转发设置 ==========
+        let http_enabled = cfg.http_forward_enabled;
+        let http_url = if http_enabled {
+            cfg.http_forward_url.clone()
+        } else {
+            // 也支持环境变量（兼容旧方式）
+            std::env::var("DEEPFLOW_HTTP_URL").unwrap_or_default()
+        };
+        let http_timeout = Duration::from_secs(cfg.http_forward_timeout_seconds);
+        let http_batch_size = cfg.http_forward_batch_size;
+
+        let (http_tx, http_handle) = if http_enabled && !http_url.is_empty() {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let url = http_url.clone();
+            let timeout = http_timeout;
+            let batch_size = http_batch_size;
+            
+            let handle = std::thread::Builder::new()
+                .name("http-sender".to_string())
+                .spawn(move || {
+                    let client = match reqwest::blocking::Client::builder()
+                        .timeout(timeout)
+                        .build()
+                    {
+                        Ok(c) => c,
+                        Err(e) => {
+                            error!("Failed to create HTTP client: {}", e);
+                            return;
+                        }
+                    };
+                    
+                    info!("HTTP sender thread started, target: {}, batch_size: {}", url, batch_size);
+                    
+                    let mut batch = Vec::with_capacity(batch_size);
+                    for data in rx {
+                        batch.push(data);
+                        if batch.len() >= batch_size {
+                            let batch_data = batch.join("\n");
+                            if let Err(e) = client.post(&url)
+                                .header("Content-Type", "application/json")
+                                .body(batch_data)
+                                .send()
+                            {
+                                error!("HTTP send failed: {}", e);
+                            }
+                            batch.clear();
+                        }
+                    }
+                    
+                    // 发送剩余数据
+                    if !batch.is_empty() {
+                        let batch_data = batch.join("\n");
+                        let _ = client.post(&url)
+                            .header("Content-Type", "application/json")
+                            .body(batch_data)
+                            .send();
+                    }
+                })
+                .unwrap();
+            
+            (Some(tx), Some(handle))
+        } else {
+            (None, None)
+        };
+        // ================================================
+
         Self {
             id,
             name,
@@ -480,6 +555,14 @@ impl<T: Sendable> UniformSender<T> {
             pre_file_path: String::new(),
             written_size: 0,
             cached: true,
+
+            // ========== 新增字段初始化 ==========
+            http_enabled,
+            http_url,
+            http_timeout,
+            http_batch_size,
+            http_tx,
+            http_handle,
         }
     }
 
@@ -797,12 +880,50 @@ impl<T: Sendable> UniformSender<T> {
                 Err(Error::BatchTooLarge(_)) => unreachable!(),
             }
         }
+        // ========== 新增：清理 HTTP 发送线程 ==========
+        if let Some(tx) = self.http_tx.take() {
+            drop(tx);  // 关闭通道
+        }
+        if let Some(handle) = self.http_handle.take() {
+            let _ = handle.join();
+        }
+        // =========================================
     }
 
     pub fn flush_writer(&mut self) {
         if let Some(buf_writer) = self.buf_writer.as_mut() {
             _ = buf_writer.flush();
         }
+    }
+
+    fn is_self_request(&self, kv_string: &str) -> bool {
+        // 发送到接收服务自身的请求
+        if kv_string.contains("/api/deepflow-data") {
+            return true;
+        }
+        
+        // 本地回环且端口是接收服务端口
+        if kv_string.contains("127.0.0.1") && kv_string.contains("\"port_dst\":8080") {
+            return true;
+        }
+        
+        // Agent 健康检查
+        if kv_string.contains("\"request_resource\":\"/livez\"") ||
+        kv_string.contains("\"request_resource\":\"/health\"") {
+            return true;
+        }
+        
+        // Agent 管理端口
+        if kv_string.contains("\"port_dst\":39090") || kv_string.contains("\"port_dst\":38086") {
+            return true;
+        }
+        
+        // 纯本地回环流量（源和目的都是 127.0.0.1）
+        if kv_string.contains("\"ip_src\":\"127.0.0.1\"") && kv_string.contains("\"ip_dst\":\"127.0.0.1\"") {
+            return true;
+        }
+        
+        false
     }
 
     pub fn handle_target_file(
@@ -815,6 +936,15 @@ impl<T: Sendable> UniformSender<T> {
         if kv_string.is_empty() {
             return Ok(());
         }
+        
+        // ========== HTTP 转发逻辑 ==========
+        if self.http_enabled && !self.is_self_request(kv_string) {
+            if let Some(tx) = &self.http_tx {
+                let _ = tx.send(kv_string.clone());
+            }
+        }
+        // ===================================
+
         if self.file_path.is_empty() {
             create_dir_all(&self.config.load().standalone_data_file_dir)?;
             self.file_path = Path::new(&self.config.load().standalone_data_file_dir)
