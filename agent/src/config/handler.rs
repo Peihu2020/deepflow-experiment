@@ -273,6 +273,11 @@ pub struct SenderConfig {
     pub server_tx_bandwidth_threshold: u64,
     pub bandwidth_probe_interval: Duration,
     pub enabled: bool,
+
+    pub http_forward_enabled: bool,
+    pub http_forward_url: String,
+    pub http_forward_timeout_seconds: u64,
+    pub http_forward_batch_size: usize,
 }
 
 impl Default for SenderConfig {
@@ -2186,6 +2191,11 @@ impl TryFrom<(Config, UserConfig)> for ModuleConfig {
                 standalone_data_file_size: conf.global.standalone_mode.max_data_file_size,
                 standalone_data_file_dir: conf.global.standalone_mode.data_file_dir.clone(),
                 enabled: conf.outputs.flow_metrics.enabled,
+
+                http_forward_enabled: conf.outputs.http_forward.enabled,
+                http_forward_url: conf.outputs.http_forward.url.clone(),
+                http_forward_timeout_seconds: conf.outputs.http_forward.timeout_seconds,
+                http_forward_batch_size: conf.outputs.http_forward.batch_size,
             },
             npb: NpbConfig {
                 mtu: conf.outputs.npb.max_mtu,
