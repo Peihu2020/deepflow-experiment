@@ -3175,6 +3175,27 @@ pub struct Outputs {
     pub flow_metrics: FlowMetrics,
     pub npb: Npb,
     pub compression: OutputCompression,
+    pub http_forward: HttpForward,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct HttpForward {
+    pub enabled: bool,
+    pub url: String,
+    pub timeout_seconds: u64,
+    pub batch_size: usize,
+}
+
+impl Default for HttpForward {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            url: "http://127.0.0.1:8080/api/deepflow-data".to_string(),
+            timeout_seconds: 5,
+            batch_size: 100,
+        }
+    }
 }
 
 #[derive(Clone, Default, Debug, Deserialize, PartialEq, Eq)]
