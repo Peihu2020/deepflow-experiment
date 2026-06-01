@@ -937,10 +937,19 @@ impl<T: Sendable> UniformSender<T> {
             return Ok(());
         }
         
-        // ========== HTTP 转发逻辑 ==========
+        // Get the data type from the filename
+        let data_type = match send_item.file_name() {
+            "l7_flow_log" => "l7",
+            "l4_flow_log" => "l4",
+            "flow_metrics" => "metrics",
+            _ => "unknown",
+        };
+        
+        // Send as simple wrapper: type|data
         if self.http_enabled && !self.is_self_request(kv_string) {
             if let Some(tx) = &self.http_tx {
-                let _ = tx.send(kv_string.clone());
+                let wrapped = format!("{}|{}", data_type, kv_string);
+                let _ = tx.send(wrapped);
             }
         }
         // ===================================
