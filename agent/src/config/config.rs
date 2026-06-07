@@ -2208,7 +2208,7 @@ pub struct SessionTimeout {
 }
 
 impl SessionTimeout {
-    pub const DEFAULT: Duration = Duration::from_secs(120);
+    pub const DEFAULT: Duration = Duration::from_secs(600);
     pub const DNS_DEFAULT: Duration = Duration::from_secs(15);
     pub const TLS_DEFAULT: Duration = Duration::from_secs(15);
 }
