@@ -356,6 +356,16 @@ impl ThrottleSender {
         if data.l7_info.skip_send() || data.l7_info.is_on_blacklist() {
             return;
         }
+        // Slow HTTP request bypass (>= 1 second)
+        let protocol = data.l7_info.protocol();
+        let rrt = data.base_info.head.rrt;
+        let is_http = matches!(protocol,
+            L7Protocol::Http1 | L7Protocol::Http2 | L7Protocol::Grpc | L7Protocol::Triple);
+        
+        if is_http && rrt >= 1_000_000 {
+            let _ = self.throttle.send(BoxAppProtoLogsData::new(data, override_resp_status));
+            return;
+        }
         if !self
             .throttle
             .send(BoxAppProtoLogsData::new(data, override_resp_status))
