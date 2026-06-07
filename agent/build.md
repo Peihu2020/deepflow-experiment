@@ -7,7 +7,21 @@ Here is the documentation about how to compile agent in Linux system
 The easiest way is to use our docker image:
 ```bash
 git clone --recursive https://github.com/deepflowio/deepflow.git 
-cd deepflow 
+cd deepflow
+
+
+# 编辑 .gitmodules 文件
+vim .gitmodules
+[submodule "agent/src/ebpf/libs/jattach"]
+    path = agent/src/ebpf/libs/jattach
+    url = https://github.com/deepflowio/jattach.git
+[submodule "message/opentelemetry"]
+    path = message/opentelemetry
+    url = https://github.com/deepflowio/opentelemetry-proto.git
+
+git submodule sync
+git submodule update --init --recursive
+
 docker run --privileged --rm -it -v \
     $(pwd):/deepflow hub.deepflow.yunshan.net/public/rust-build bash -c \
     "cd /deepflow/agent && cargo build"
