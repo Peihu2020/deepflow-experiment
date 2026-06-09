@@ -363,13 +363,13 @@ impl ThrottleSender {
         let is_http = matches!(proto,
             L7Protocol::Http1 | L7Protocol::Http2 | L7Protocol::Grpc | L7Protocol::Triple);
         
-        if is_http && rrt >= 1_000_000 {
+        if is_http && rrt >= 100_000 {
             // 添加调试日志（只使用 base_info 中的字段）
             // log::info!(
             //     "[SLOW_BYPASS] flow_id={}, rrt={}us ({:.2}s), proto={:?}",
             //     data.base_info.flow_id,
             //     rrt,
-            //     rrt as f64 / 1_000_000.0,
+            //     rrt as f64 / 100_000.0,
             //     proto
             // );
             let _ = self.throttle.send(BoxAppProtoLogsData::new(data, override_resp_status));
