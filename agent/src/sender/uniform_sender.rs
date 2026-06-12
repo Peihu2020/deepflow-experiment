@@ -433,7 +433,7 @@ pub struct UniformSender<T> {
     http_url: String,
     http_timeout: Duration,
     http_batch_size: usize,
-    http_tx: Option<std::sync::mpsc::Sender<String>>,
+    http_tx: Option<std::sync::mpsc::SyncSender<String>>,
     http_handle: Option<JoinHandle<()>>,
 }
 
@@ -468,7 +468,8 @@ impl<T: Sendable> UniformSender<T> {
         let http_batch_size = cfg.http_forward_batch_size;
 
         let (http_tx, http_handle) = if http_enabled && !http_url.is_empty() {
-            let (tx, rx) = std::sync::mpsc::channel();
+            use std::sync::mpsc::sync_channel;
+            let (tx, rx) = sync_channel(5000);  // 最多 5000 条积压
             let url = http_url.clone();
             let timeout = http_timeout;
             let batch_size = http_batch_size;
@@ -494,13 +495,10 @@ impl<T: Sendable> UniformSender<T> {
                         batch.push(data);
                         if batch.len() >= batch_size {
                             let batch_data = batch.join("\n");
-                            if let Err(e) = client.post(&url)
-                                .header("Content-Type", "application/json")
-                                .body(batch_data)
-                                .send()
-                            {
-                                error!("HTTP send failed: {}", e);
-                            }
+                            let _ = client.post(&url)
+                            .header("Content-Type", "application/json")
+                            .body(batch_data)
+                            .send();
                             batch.clear();
                         }
                     }
@@ -949,7 +947,16 @@ impl<T: Sendable> UniformSender<T> {
         if self.http_enabled && !self.is_self_request(kv_string) {
             if let Some(tx) = &self.http_tx {
                 let wrapped = format!("{}|{}", data_type, kv_string);
-                let _ = tx.send(wrapped);
+                if let Err(_) = tx.try_send(wrapped) {
+                    // 静默增加丢弃计数，不打印错误
+                    self.counter.dropped.fetch_add(1, Ordering::Relaxed);
+                    
+                    // 可选：每 1000 次丢弃打印一次摘要
+                    let dropped = self.counter.dropped.load(Ordering::Relaxed);
+                    if dropped % 1000 == 0 {
+                        warn!("HTTP channel full, dropped {} events total", dropped);
+                    }
+                }
             }
         }
         // ===================================
