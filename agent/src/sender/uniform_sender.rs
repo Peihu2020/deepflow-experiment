@@ -894,7 +894,12 @@ impl<T: Sendable> UniformSender<T> {
         }
     }
 
-    fn is_self_request(&self, kv_string: &str) -> bool {
+    fn is_self_request(&self, kv_string: &str) -> bool { 
+        // 检查是否包含配置的 URL
+        if kv_string.contains(&self.http_url) {
+            return true;
+        }
+    
         // 发送到接收服务自身的请求
         if kv_string.contains("/api/deepflow-data") {
             return true;
