@@ -909,6 +909,16 @@ impl<T: Sendable> UniformSender<T> {
         if kv_string.contains("127.0.0.1") && kv_string.contains("\"port_dst\":8080") {
             return true;
         }
+
+        // this is for kafa
+        if kv_string.contains("\"port_dst\":9092") {
+            return true;
+        }
+
+        if kv_string.contains("\"process_kname_0\":\"deepflow-newrel\"") {
+            info!("Filtering Sidecar Kafka traffic: {}", kv_string);
+            return true;
+        }
         
         // Agent 健康检查
         if kv_string.contains("\"request_resource\":\"/livez\"") ||
