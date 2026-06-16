@@ -910,15 +910,26 @@ impl<T: Sendable> UniformSender<T> {
             return true;
         }
 
-        // this is for kafa
-        if kv_string.contains("\"port_dst\":9092") {
-            return true;
+        // this is for kafka - 过滤 Sidecar 到 Kafka 的流量
+        let sidecar_ip = self.http_url
+            .split("://")
+            .nth(1)
+            .and_then(|host| host.split('/').next())
+            .and_then(|ip_port| ip_port.split(':').next());
+
+        if let Some(ip) = sidecar_ip {
+            // 检查源 IP 是 Sidecar 且目标端口是 Kafka (9092)
+            if kv_string.contains(&format!("\"ip_src\":\"{}\"", ip)) && 
+            kv_string.contains("\"port_dst\":9092") {
+                // info!("Filtering Sidecar to Kafka traffic: {}", kv_string);
+                return true;
+            }
         }
 
-        if kv_string.contains("\"process_kname_0\":\"deepflow-newrel\"") {
-            info!("Filtering Sidecar Kafka traffic: {}", kv_string);
-            return true;
-        }
+        // if kv_string.contains("\"process_kname_0\":\"deepflow-newrel\"") {
+        //     // info!("Filtering Sidecar Kafka traffic: {}", kv_string);
+        //     return true;
+        // }
         
         // Agent 健康检查
         if kv_string.contains("\"request_resource\":\"/livez\"") ||
