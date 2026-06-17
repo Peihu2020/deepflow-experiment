@@ -26,7 +26,7 @@ use std::sync::{
 };
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime};
-
+use hostname; 
 use arc_swap::access::Access;
 use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
@@ -950,6 +950,28 @@ impl<T: Sendable> UniformSender<T> {
         false
     }
 
+    pub fn get_hostname() -> String {
+        // 1. 优先使用环境变量覆盖
+        if let Ok(hostname) = std::env::var("HOSTNAME_OVERRIDE") {
+            if !hostname.is_empty() {
+                return hostname;
+            }
+        }
+        
+        // 2. 系统主机名（使用 hostname crate）
+        if let Ok(hostname) = hostname::get() {
+            return hostname.to_string_lossy().to_string();
+        }
+        
+        // 3. 环境变量 HOSTNAME
+        if let Ok(hostname) = std::env::var("HOSTNAME") {
+            return hostname;
+        }
+        
+        // 4. 默认值
+        "unknown".to_string()
+    }
+
     pub fn handle_target_file(
         &mut self,
         send_item: T,
@@ -961,6 +983,20 @@ impl<T: Sendable> UniformSender<T> {
             return Ok(());
         }
         
+         // ========== 添加 hostname 到最前面 ==========
+        if !kv_string.contains(r#""hostname":"#) {
+            let hostname = Self::get_hostname();
+            
+            // 在第一个 { 后插入 hostname
+            if let Some(pos) = kv_string.find('{') {
+                let pos = pos + 1;  // 在 { 后面插入
+                kv_string.insert_str(pos, &format!(r#""hostname":"{}","#, hostname));
+            } else {
+                log::warn!("kv_string does not contain '{{', cannot add hostname");
+            }
+        }
+    
+    
         // Get the data type from the filename
         let data_type = match send_item.file_name() {
             "l7_flow_log" => "l7",
