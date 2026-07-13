@@ -1060,6 +1060,7 @@ dependencies = [
  "npb_pcap_policy",
  "npb_sender",
  "num_enum",
+ "once_cell",
  "openshift-openapi",
  "packet_dedup",
  "packet_segmentation_reassembly",
@@ -2924,9 +2925,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.17.2"
+version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9670a07f94779e00908f3e686eab508878ebb390ba6e604d3a284c00e8d0487b"
+checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "oorandom"

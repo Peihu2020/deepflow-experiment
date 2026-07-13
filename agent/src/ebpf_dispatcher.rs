@@ -76,6 +76,10 @@ use crate::policy::PolicyGetter;
 use crate::rpc::get_timestamp;
 use crate::utils::{process::ProcessListener, stats};
 
+// Add these imports at the top of ebpf_dispatcher.rs
+use crate::custom_forwarder::{CustomForwarder, StackTraceData};
+use once_cell::sync::OnceCell;
+
 #[cfg(feature = "extended_observability")]
 use public::queue::Error::Terminated;
 use public::{
@@ -93,6 +97,9 @@ use public::{
     utils::bitmap::parse_u16_range_list_to_bitmap,
 };
 use reorder::{Reorder, ReorderCounter, StatsReorderCounter};
+
+// Add global forwarder
+static GLOBAL_FORWARDER: OnceCell<Arc<CustomForwarder>> = OnceCell::new();
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 struct HookedSocketSyscallBitmap(c_ulonglong);
@@ -645,6 +652,26 @@ pub unsafe fn string_from_null_terminated_c_str(ptr: *const u8) -> String {
         .into_owned()
 }
 
+// Add initialization function
+pub fn init_custom_forwarder(endpoint: &str) {
+    if endpoint.is_empty() {
+        return;
+    }
+    
+    let endpoint = endpoint.to_string();
+    let endpoint_clone = endpoint.clone();  // ← Clone for logging
+    
+    // Spawn in a separate thread with its own Tokio runtime
+    thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+        rt.block_on(async {
+            let forwarder = CustomForwarder::new(endpoint, 100, 5);
+            GLOBAL_FORWARDER.set(forwarder).unwrap();
+            info!("Custom forwarder initialized to {}", endpoint_clone);
+        });
+    });
+}
+
 impl EbpfCollector {
     extern "C" fn ebpf_l7_callback(
         _: *mut c_void,
@@ -744,6 +771,38 @@ impl EbpfCollector {
     ) -> c_int {
         #[allow(static_mut_refs)]
         unsafe {
+            // ---- CUSTOM FORWARDING ----
+            if let Some(forwarder) = GLOBAL_FORWARDER.get() {
+                if !data.is_null() {
+                    let raw_data = &*data;
+                    
+                    // Build the stack trace data
+                    let stack_data_slice = slice::from_raw_parts(
+                        raw_data.stack_data as *mut u8,
+                        raw_data.stack_data_len as usize
+                    );
+                    
+                    let trace_data = StackTraceData {
+                        pid: raw_data.pid,
+                        tid: raw_data.tid,
+                        cpu: raw_data.cpu,
+                        count: raw_data.count,
+                        stime: raw_data.stime,
+                        timestamp: raw_data.timestamp,
+                        comm: string_from_null_terminated_c_str(raw_data.comm.as_ptr()),
+                        process_name: string_from_null_terminated_c_str(raw_data.process_name.as_ptr()),
+                        u_stack_id: raw_data.u_stack_id as i32,  // ← Cast to i32
+                        k_stack_id: raw_data.k_stack_id as i32,  // ← Cast to i32
+                        profiler_type: raw_data.profiler_type,
+                        stack_data: stack_data_slice.to_vec(),
+                        stack_data_len: raw_data.stack_data_len,
+                    };
+                    
+                    // Send asynchronously
+                    forwarder.send_data(trace_data);
+                }
+            }
+            // ---- END CUSTOM FORWARDING ----
             if !SWITCH || EBPF_PROFILE_SENDER.is_none() {
                 return 0;
             }

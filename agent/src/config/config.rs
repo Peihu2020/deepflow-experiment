@@ -3213,6 +3213,26 @@ pub struct Dev {
     pub feature_flags: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct CustomForward {
+    pub enabled: bool,
+    pub endpoint: String,
+    pub batch_size: usize,
+    pub flush_interval_secs: u64,
+}
+
+impl Default for CustomForward {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            endpoint: "http://localhost:8080/api/profiler".to_string(),
+            batch_size: 100,
+            flush_interval_secs: 5,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct UserConfig {
@@ -3225,6 +3245,7 @@ pub struct UserConfig {
     #[serde(skip)]
     #[cfg(feature = "enterprise")]
     pub custom_app: CustomApp,
+    pub custom_forward: CustomForward,
 }
 
 #[cfg(feature = "enterprise")]

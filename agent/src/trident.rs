@@ -3051,6 +3051,13 @@ impl AgentComponents {
                         &stats::NoTagModule("ebpf-collector"),
                         Countable::Owned(Box::new(ebpf_collector.get_sync_counter())),
                     );
+                    // Initialize custom forwarder after EbpfCollector is created
+                    if candidate_config.user_config.custom_forward.enabled {
+                        crate::ebpf_dispatcher::init_custom_forwarder(
+                            &candidate_config.user_config.custom_forward.endpoint
+                        );
+                    }
+                    // ===================================
                     ebpf_dispatcher_component = Some(EbpfDispatcherComponent {
                         ebpf_collector,
                         session_aggregator,

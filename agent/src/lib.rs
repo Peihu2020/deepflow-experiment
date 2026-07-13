@@ -42,6 +42,7 @@ pub mod trident;
 pub mod utils;
 #[cfg(unix)]
 pub mod watchdog;
+pub mod custom_forwarder;
 
 // for benchmarks
 #[doc(hidden)]

@@ -87,6 +87,7 @@ npb_handler = { path = "plugins/npb_handler" }
 npb_pcap_policy = { path = "plugins/npb_pcap_policy" }
 npb_sender = { path = "plugins/npb_sender" }
 num_enum.workspace = true
+once_cell = "1.19" 
 packet_dedup = { path = "plugins/packet_dedup" }
 packet_segmentation_reassembly = { path = "plugins/packet_segmentation_reassembly" }
 packet_sequence_block = { path = "plugins/packet_sequence_block" }
