@@ -787,7 +787,10 @@ int start_continuous_profiler(int freq, int java_syms_update_delay,
 	pthread_mutex_init(&cpdbg_mutex, NULL);
 
 	if (creat_ksyms_cache())
-		return (-1);
+	    ebpf_warning("creat_ksyms_cache() failed. "
+                 "Kernel symbols not available, but user-space "
+                 "profiling (Java, Python, etc.) will continue.\n");
+		// return (-1);
 
 	// CPUID will not be included in the aggregation of stack trace data.
 	set_profiler_cpu_aggregation(0);

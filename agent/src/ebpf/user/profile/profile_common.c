@@ -242,7 +242,7 @@ bool run_conditions_check(void)
 		     "r_restrict' file is not 2, if it is 2 please set it "
 		     "to 1.\n2 Add 'CAP_SYSLOG' permission to the containe"
 		     "r.\n3 Restart the pod.");
-		return false;
+		return true;
 	}
 
 	return true;
