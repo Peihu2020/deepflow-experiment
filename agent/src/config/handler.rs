@@ -101,7 +101,7 @@ use public::bitmap::Bitmap;
 use public::l7_protocol::L7Protocol;
 use public::proto::agent::{self, AgentType, PacketCaptureType};
 use public::utils::{bitmap::parse_range_list_to_bitmap, net::MacAddr};
-
+use serde::{Deserialize, Serialize};
 cfg_if::cfg_if! {
 if #[cfg(feature = "enterprise")] {
         use crate::common::{
@@ -249,6 +249,20 @@ pub struct EnvironmentConfig {
     pub idle_memory_trimming: bool,
 }
 
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct ExcludeTraffic {
+    #[serde(default)]
+    pub ip_src: Option<String>,
+    #[serde(default)]
+    pub ip_dst: Option<String>,
+    #[serde(default)]
+    pub port_src: Option<u16>,
+    #[serde(default)]
+    pub port_dst: Option<u16>,
+    #[serde(default)]
+    pub protocol: Option<String>,
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct SenderConfig {
     pub dest_ip: String,
@@ -278,6 +292,7 @@ pub struct SenderConfig {
     pub http_forward_url: String,
     pub http_forward_timeout_seconds: u64,
     pub http_forward_batch_size: usize,
+    pub exclude_traffic: Vec<ExcludeTraffic>,
 }
 
 impl Default for SenderConfig {
@@ -2196,6 +2211,7 @@ impl TryFrom<(Config, UserConfig)> for ModuleConfig {
                 http_forward_url: conf.outputs.http_forward.url.clone(),
                 http_forward_timeout_seconds: conf.outputs.http_forward.timeout_seconds,
                 http_forward_batch_size: conf.outputs.http_forward.batch_size,
+                exclude_traffic: conf.outputs.http_forward.exclude_traffic.clone(),
             },
             npb: NpbConfig {
                 mtu: conf.outputs.npb.max_mtu,

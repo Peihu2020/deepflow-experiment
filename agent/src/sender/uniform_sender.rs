@@ -49,6 +49,7 @@ use crate::utils::stats::{
 };
 use public::proto::agent::{Exception, SocketType};
 use public::queue::{Error, Receiver};
+use crate::config::handler::ExcludeTraffic;
 
 const PRE_FILE_SUFFIX: &str = ".pre";
 const MAX_WAIT_TIMES: u32 = 100;
@@ -363,6 +364,39 @@ lazy_static! {
     static ref GLOBAL_CONNECTION: Arc<Mutex<Connection>> = Arc::new(Mutex::new(Connection::new()));
 }
 
+impl ExcludeTraffic {
+    pub fn matches(&self, kv_string: &str) -> bool {
+        if let Some(ip_src) = &self.ip_src {
+            if !kv_string.contains(&format!("\"ip_src\":\"{}\"", ip_src)) {
+                return false;
+            }
+        }
+        if let Some(ip_dst) = &self.ip_dst {
+            if !kv_string.contains(&format!("\"ip_dst\":\"{}\"", ip_dst)) {
+                return false;
+            }
+        }
+        if let Some(port_src) = self.port_src {
+            if !kv_string.contains(&format!("\"port_src\":{}", port_src)) {
+                return false;
+            }
+        }
+        if let Some(port_dst) = self.port_dst {
+            if !kv_string.contains(&format!("\"port_dst\":{}", port_dst)) {
+                return false;
+            }
+        }
+        if let Some(protocol) = &self.protocol {
+            let proto_lower = protocol.to_lowercase();
+            if !kv_string.contains(&format!("\"protocol\":\"{}\"", proto_lower)) &&
+               !kv_string.contains(&format!("\"protocol\":\"{}\"", protocol)) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ConnectionType {
     Global,
@@ -435,6 +469,7 @@ pub struct UniformSender<T> {
     http_batch_size: usize,
     http_tx: Option<std::sync::mpsc::SyncSender<String>>,
     http_handle: Option<JoinHandle<()>>,
+    exclude_traffic: Vec<ExcludeTraffic>,
 }
 
 impl<T: Sendable> UniformSender<T> {
@@ -464,6 +499,7 @@ impl<T: Sendable> UniformSender<T> {
             // 也支持环境变量（兼容旧方式）
             std::env::var("DEEPFLOW_HTTP_URL").unwrap_or_default()
         };
+        let exclude_traffic = cfg.exclude_traffic.clone();
         let http_timeout = Duration::from_secs(cfg.http_forward_timeout_seconds);
         let http_batch_size = cfg.http_forward_batch_size;
 
@@ -561,6 +597,7 @@ impl<T: Sendable> UniformSender<T> {
             http_batch_size,
             http_tx,
             http_handle,
+            exclude_traffic,
         }
     }
 
@@ -895,54 +932,42 @@ impl<T: Sendable> UniformSender<T> {
     }
 
     fn is_self_request(&self, kv_string: &str) -> bool { 
-        // 检查是否包含配置的 URL
+        // 1. Check URL
         if kv_string.contains(&self.http_url) {
             return true;
         }
-    
-        // 发送到接收服务自身的请求
+
+        // 2. Check API endpoint
         if kv_string.contains("/api/deepflow-data") {
             return true;
         }
         
-        // 本地回环且端口是接收服务端口
+        // 3. Check localhost:8080
         if kv_string.contains("127.0.0.1") && kv_string.contains("\"port_dst\":8080") {
             return true;
         }
 
-        // this is for kafka - 过滤 Sidecar 到 Kafka 的流量
-        let sidecar_ip = self.http_url
-            .split("://")
-            .nth(1)
-            .and_then(|host| host.split('/').next())
-            .and_then(|ip_port| ip_port.split(':').next());
-
-        if let Some(ip) = sidecar_ip {
-            // 检查源 IP 是 Sidecar 且目标端口是 Kafka (9092)
-            if kv_string.contains(&format!("\"ip_src\":\"{}\"", ip)) && 
-            kv_string.contains("\"port_dst\":9092") {
-                // info!("Filtering Sidecar to Kafka traffic: {}", kv_string);
+        // 4. ========== NEW: Check exclude_traffic rules ==========
+        for exclude in &self.exclude_traffic {
+            if exclude.matches(kv_string) {
+                // Optional: Log filtered traffic for debugging
+                // info!("Filtered traffic: {}", kv_string);
                 return true;
             }
         }
 
-        // if kv_string.contains("\"process_kname_0\":\"deepflow-newrel\"") {
-        //     // info!("Filtering Sidecar Kafka traffic: {}", kv_string);
-        //     return true;
-        // }
-        
-        // Agent 健康检查
+        // 5. Agent health checks
         if kv_string.contains("\"request_resource\":\"/livez\"") ||
         kv_string.contains("\"request_resource\":\"/health\"") {
             return true;
         }
         
-        // Agent 管理端口
+        // 6. Agent management ports
         if kv_string.contains("\"port_dst\":39090") || kv_string.contains("\"port_dst\":38086") {
             return true;
         }
         
-        // 纯本地回环流量（源和目的都是 127.0.0.1）
+        // 7. Pure loopback traffic
         if kv_string.contains("\"ip_src\":\"127.0.0.1\"") && kv_string.contains("\"ip_dst\":\"127.0.0.1\"") {
             return true;
         }

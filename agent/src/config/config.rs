@@ -55,7 +55,7 @@ use crate::platform::{OsAppTag, ProcessData};
 use crate::{
     common::DEFAULT_LOG_FILE, metric::document::TapSide, rpc::Session, trident::RunningMode,
 };
-
+use crate::config::handler::ExcludeTraffic;
 use public::{
     bitmap::Bitmap,
     l7_protocol::{L7Protocol, L7ProtocolChecker},
@@ -3185,6 +3185,8 @@ pub struct HttpForward {
     pub url: String,
     pub timeout_seconds: u64,
     pub batch_size: usize,
+    #[serde(default)]
+    pub exclude_traffic: Vec<ExcludeTraffic>,
 }
 
 impl Default for HttpForward {
@@ -3194,6 +3196,7 @@ impl Default for HttpForward {
             url: "http://127.0.0.1:8080/api/deepflow-data".to_string(),
             timeout_seconds: 5,
             batch_size: 100,
+            exclude_traffic: Vec::new(),
         }
     }
 }
@@ -3246,6 +3249,8 @@ pub struct UserConfig {
     #[cfg(feature = "enterprise")]
     pub custom_app: CustomApp,
     pub custom_forward: CustomForward,
+    #[serde(default)]
+    pub exclude_traffic: Vec<ExcludeTraffic>,
 }
 
 #[cfg(feature = "enterprise")]
