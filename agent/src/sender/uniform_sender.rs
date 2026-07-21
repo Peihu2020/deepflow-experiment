@@ -393,6 +393,14 @@ impl ExcludeTraffic {
                 return false;
             }
         }
+        if let Some(domain) = &self.domain {
+            // Check if the domain appears in the request
+            if !kv_string.contains(&format!("\"request_domain\":\"{}\"", domain)) &&
+               !kv_string.contains(&format!("\"request_host\":\"{}\"", domain)) &&
+               !kv_string.contains(&format!("\"host\":\"{}\"", domain)) {
+                return false;
+            }
+        }
         true
     }
 }

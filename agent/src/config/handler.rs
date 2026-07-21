@@ -261,6 +261,8 @@ pub struct ExcludeTraffic {
     pub port_dst: Option<u16>,
     #[serde(default)]
     pub protocol: Option<String>,
+    #[serde(default)]
+    pub domain: Option<String>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
